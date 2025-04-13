@@ -1,4 +1,7 @@
 // MSSQL clinet that is using windows integrated authentication (kerberos) in order to enumerate mssql instance and abuse
+// TODO:
+// 1. Add options for specifying database to connect to, eg. at the moment on raw queries, use statement needs to be used
+//    --raw "use msdb; ......"
 using System;
 using System.Data.SqlClient;
 using System.Collections.Generic;
@@ -15,7 +18,12 @@ namespace SQL
             var results = new List<object>();
             while (runner.Read())
             {
-                results.Add(runner[0]);
+                var row = new List<object>();
+                for (int i = 0; i < runner.FieldCount; i++)
+                {
+                    row.Add(runner[i]);
+                }
+                results.Add(row);
             }
             runner.Close();
             return results;
@@ -372,7 +380,8 @@ namespace SQL
                     var results = RunQuery(con, query);
                     foreach (var res in results)
                     {
-                        Console.WriteLine(res);
+                        var row = (List<object>)res;
+                        Console.WriteLine(string.Join(" | ", row));
                     }
                     break;
 
